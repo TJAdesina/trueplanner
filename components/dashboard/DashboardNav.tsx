@@ -23,7 +23,7 @@ export function DashboardNav() {
   }
 
   return (
-    <header className="border-b border-charcoal/10 bg-white">
+    <header className="border-b border-charcoal/10 bg-surface">
       <div className="content-wrap flex h-16 items-center justify-between">
         <Link href="/dashboard">
           <Logo />

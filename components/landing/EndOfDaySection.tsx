@@ -7,7 +7,7 @@ const SUMMARY = [
 
 export function EndOfDaySection() {
   return (
-    <section className="bg-white py-20 sm:py-28">
+    <section className="bg-surface py-20 sm:py-28">
       <div className="content-wrap grid items-center gap-12 lg:grid-cols-2">
         <div>
           <h2 className="font-serif text-3xl font-medium text-forest sm:text-4xl">

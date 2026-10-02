@@ -41,6 +41,7 @@ exception when duplicate_object then null; end $$;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
+  timezone text not null default 'UTC',
   -- notification settings
   notifications_enabled boolean not null default true,
   quiet_hours_start time,
@@ -66,6 +67,8 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists timezone text not null default 'UTC';
 
 -- ---------------------------------------------------------------------
 -- tasks
@@ -131,6 +134,73 @@ create table if not exists public.checkins (
 create index if not exists checkins_user_idx on public.checkins (user_id, created_at desc);
 create index if not exists checkins_user_status_idx on public.checkins (user_id, status);
 
+create or replace function public.create_checkin_if_available(
+  p_checkin_id uuid,
+  p_user_id uuid,
+  p_task_id uuid,
+  p_trigger_type checkin_trigger,
+  p_headline text,
+  p_message text,
+  p_source text,
+  p_cooldown_minutes int default 0
+)
+returns setof public.checkins
+language plpgsql
+set search_path = public
+as $$
+declare
+  pending_checkin public.checkins%rowtype;
+begin
+  if auth.uid() is distinct from p_user_id and coalesce(auth.role(), '') <> 'service_role' then
+    raise exception 'Not authorized to create a check-in for this user';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0));
+
+  select * into pending_checkin
+  from public.checkins
+  where user_id = p_user_id and status = 'pending'
+  order by created_at desc
+  limit 1;
+
+  if found then
+    return next pending_checkin;
+    return;
+  end if;
+
+  if p_cooldown_minutes > 0 and exists (
+    select 1 from public.checkins
+    where user_id = p_user_id
+      and created_at >= now() - make_interval(mins => p_cooldown_minutes)
+  ) then
+    return;
+  end if;
+
+  return query
+  insert into public.checkins (
+    id, user_id, task_id, trigger_type, headline, message, source
+  ) values (
+    p_checkin_id, p_user_id, p_task_id, p_trigger_type, p_headline, p_message, p_source
+  )
+  returning *;
+end;
+$$;
+
+revoke all on function public.create_checkin_if_available(uuid, uuid, uuid, checkin_trigger, text, text, text, int) from public, anon;
+grant execute on function public.create_checkin_if_available(uuid, uuid, uuid, checkin_trigger, text, text, text, int) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------
+-- push_subscriptions: browser endpoints for Web Push delivery
+-- ---------------------------------------------------------------------
+create table if not exists public.push_subscriptions (
+  endpoint text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  subscription jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
+
 -- ---------------------------------------------------------------------
 -- updated_at helper trigger
 -- ---------------------------------------------------------------------
@@ -175,6 +245,7 @@ alter table public.profiles enable row level security;
 alter table public.tasks enable row level security;
 alter table public.task_events enable row level security;
 alter table public.checkins enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
@@ -198,6 +269,10 @@ create policy "task_events_all_own" on public.task_events
 
 drop policy if exists "checkins_all_own" on public.checkins;
 create policy "checkins_all_own" on public.checkins
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "push_subscriptions_all_own" on public.push_subscriptions;
+create policy "push_subscriptions_all_own" on public.push_subscriptions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- =====================================================================

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { useRouter } from "next/navigation";
 import { Toggle } from "@/components/ui/Toggle";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
+import { enablePushNotifications } from "@/lib/notifications";
 import type { CheckinAction, TaskPriority } from "@/lib/types";
 
 import type { Profile } from "@/lib/types";
@@ -14,6 +15,19 @@ export default function SettingsPage() {
   const { profile, loading, updateProfile } = useProfile();
   const router = useRouter();
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [pushStatus, setPushStatus] = useState<{
+    subscribed: boolean;
+    storageReady: boolean;
+    configured?: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/push-subscription")
+      .then((response) => response.json())
+      .then((status) => setPushStatus(status))
+      .catch(() => setPushStatus({ subscribed: false, storageReady: false }));
+  }, []);
 
   if (loading || !profile) {
     return <p className="text-sm text-charcoal/50">Loading settings\u2026</p>;
@@ -22,6 +36,28 @@ export default function SettingsPage() {
   async function save(patch: Partial<Profile>) {
     await updateProfile(patch);
     setSavedAt(Date.now());
+  }
+
+  async function setNotificationsEnabled(enabled: boolean) {
+    setNotificationError(null);
+    if (!enabled) {
+      await save({ notifications_enabled: false });
+      return;
+    }
+
+    try {
+      const permission = await enablePushNotifications();
+      if (permission === "granted") {
+        await save({ notifications_enabled: true });
+        const response = await fetch("/api/push-subscription");
+        if (response.ok) setPushStatus(await response.json());
+      }
+      else setNotificationError("Allow notifications in your browser to enable push check-ins.");
+    } catch (error) {
+      setNotificationError(
+        error instanceof Error ? error.message : "Could not enable push notifications."
+      );
+    }
   }
 
   async function exportData() {
@@ -62,8 +98,31 @@ export default function SettingsPage() {
             label="Browser notifications"
             description="Get check-ins even when the tab isn't focused."
             checked={profile.notifications_enabled}
-            onChange={(v) => save({ notifications_enabled: v })}
+            onChange={setNotificationsEnabled}
           />
+          <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <p className="text-xs text-charcoal/60" role="status">
+              {!pushStatus
+                ? "Checking this browser's push setup..."
+                : !pushStatus.configured
+                  ? "Web Push is missing its server-side VAPID public key."
+                : !pushStatus.storageReady
+                  ? "Push subscription storage is unavailable. Run the latest Supabase schema."
+                  : pushStatus.subscribed
+                    ? "This browser is registered to receive check-in pushes."
+                    : "This browser has no push subscription yet."}
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => setNotificationsEnabled(true)}
+              disabled={!pushStatus?.storageReady || !pushStatus.configured}
+            >
+              Enable on this device
+            </Button>
+          </div>
+          {notificationError && (
+            <p className="py-2 text-sm text-[#B3492B]">{notificationError}</p>
+          )}
           <div className="py-3">
             <span className="block text-sm font-medium text-charcoal">Check-in sensitivity</span>
             <div className="mt-2 flex gap-2">

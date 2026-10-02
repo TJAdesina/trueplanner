@@ -15,7 +15,7 @@ export function FinalCTA() {
         <div className="mt-9">
           <Link
             href="/signup"
-            className="btn bg-cream px-7 py-3 text-base font-medium text-forest hover:bg-white"
+            className="btn bg-cream px-7 py-3 text-base font-medium text-forest hover:bg-surface"
           >
             Start planning
           </Link>

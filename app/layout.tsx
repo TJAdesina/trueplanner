@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import "./globals.css";
 
 const serif = Fraunces({
@@ -34,6 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable}`}>
       <body className="bg-cream text-charcoal font-sans antialiased">
+        <ServiceWorkerRegistration />
         {children}
       </body>
     </html>

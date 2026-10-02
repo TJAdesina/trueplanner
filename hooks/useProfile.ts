@@ -17,19 +17,54 @@ export function useProfile() {
       return;
     }
 
-    const { data } = await supabase
+    const { data: profileData } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .single();
 
-    setProfile((data as Profile) ?? null);
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    let currentProfile = profileData;
+    if (profileData && profileData.timezone !== timeZone) {
+      const { data: updatedProfile } = await supabase
+        .from("profiles")
+        .update({ timezone: timeZone })
+        .eq("id", user.id)
+        .select()
+        .single();
+      if (updatedProfile) currentProfile = updatedProfile;
+    }
+
+    setProfile(
+      currentProfile
+        ? ({ ...currentProfile, timezone: currentProfile.timezone ?? timeZone } as Profile)
+        : null
+    );
     setLoading(false);
   }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!profile || typeof document === "undefined") return;
+    const root = document.documentElement;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      root.classList.toggle(
+        "dark",
+        profile.theme === "dark" || (profile.theme === "system" && media.matches)
+      );
+    };
+
+    applyTheme();
+    if (profile.theme === "system") media.addEventListener("change", applyTheme);
+    return () => {
+      media.removeEventListener("change", applyTheme);
+      root.classList.remove("dark");
+    };
+  }, [profile?.theme]);
 
   const updateProfile = useCallback(
     async (patch: Partial<Profile>) => {

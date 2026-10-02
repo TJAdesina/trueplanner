@@ -7,7 +7,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useCheckinEngine } from "@/hooks/useCheckinEngine";
 import type { NewTask, Task } from "@/lib/types";
 import { findCurrentTask } from "@/lib/taskUtils";
-import { notificationPermission, requestNotificationPermission } from "@/lib/notifications";
+import { enablePushNotifications } from "@/lib/notifications";
 
 import { TodayOverview } from "@/components/dashboard/TodayOverview";
 import { CurrentTask } from "@/components/dashboard/CurrentTask";
@@ -35,7 +35,12 @@ export default function DashboardPage() {
   const { activeCheckin, dismiss, resolve } = useCheckinEngine(tasks, profile);
 
   const [modal, setModal] = useState<ModalState>({ type: "none" });
-  const [permission, setPermission] = useState(notificationPermission());
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
+    typeof window !== "undefined" && "Notification" in window
+      ? Notification.permission
+      : "unsupported"
+  );
+  const [pushError, setPushError] = useState<string | null>(null);
 
   const currentTask = findCurrentTask(tasks);
   const checkinTask = tasks.find((t) => t.id === activeCheckin?.task_id) ?? currentTask;
@@ -49,8 +54,14 @@ export default function DashboardPage() {
   }
 
   async function enableNotifications() {
-    const result = await requestNotificationPermission();
-    setPermission(result);
+    setPushError(null);
+    try {
+      const result = await enablePushNotifications();
+      setPermission(result);
+      if (result === "granted") await updateProfile({ notifications_enabled: true });
+    } catch (error) {
+      setPushError(error instanceof Error ? error.message : "Could not enable push notifications.");
+    }
   }
 
   async function handleCheckinAction(action: "cut" | "shrink" | "move") {
@@ -75,6 +86,7 @@ export default function DashboardPage() {
           </Button>
         </div>
       )}
+      {pushError && <p className="text-sm text-[#B3492B]">{pushError}</p>}
 
       <div className="flex items-center justify-between">
         <TodayOverview tasks={tasks} />

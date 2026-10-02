@@ -14,7 +14,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(
         <input
           ref={ref}
           id={id}
-          className={`w-full rounded-lg border border-charcoal/15 bg-white px-3.5 py-2.5 text-sm text-charcoal placeholder:text-charcoal/35 focus:border-forest/40 focus:outline-none focus:ring-2 focus:ring-forest/15 ${className}`}
+          className={`w-full rounded-lg border border-charcoal/15 bg-surface px-3.5 py-2.5 text-sm text-charcoal placeholder:text-charcoal/35 focus:border-forest/40 focus:outline-none focus:ring-2 focus:ring-forest/15 ${className}`}
           {...props}
         />
       </div>

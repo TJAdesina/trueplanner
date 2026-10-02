@@ -9,12 +9,30 @@ import { effectiveStatus, isActiveStatus } from "./taskUtils";
  * phrase it. This file contains no language generation at all.
  */
 
-const COOLDOWN_MINUTES = 30;
 const REPEATED_MOVE_THRESHOLD = 2;
 
-function withinCooldown(task: Task, now: Date): boolean {
+function taskIsNearEnd(task: Task, now: Date, sensitivity: Profile["checkin_sensitivity"]): boolean {
+  const start = new Date(task.start_time).getTime();
+  const end = new Date(task.end_time).getTime();
+  const created = new Date(task.created_at).getTime();
+  const duration = end - start;
+  const elapsed = now.getTime() - start;
+  const minimumAgeMinutes = sensitivity === "proactive" ? 1 : sensitivity === "balanced" ? 3 : 5;
+  const minimumAge = Math.min(minimumAgeMinutes * 60_000, duration * 0.1);
+  const leadFraction = sensitivity === "proactive" ? 0.3 : sensitivity === "balanced" ? 0.15 : 0;
+  const leadTime = duration * leadFraction;
+
+  return (
+    duration > 0 &&
+    now.getTime() >= start &&
+    now.getTime() - created >= minimumAge &&
+    elapsed >= duration - leadTime
+  );
+}
+
+function withinCooldown(task: Task, now: Date, sensitivity: Profile["checkin_sensitivity"]): boolean {
   if (!task.last_checkin_at) return false;
-  return minutesBetween(new Date(task.last_checkin_at), now) < COOLDOWN_MINUTES;
+  return minutesBetween(new Date(task.last_checkin_at), now) < cooldownForSensitivity(sensitivity);
 }
 
 /**
@@ -31,11 +49,15 @@ export function detectSituation(
   if (!tasks.length) return null;
 
   const active = tasks.filter((t) => isActiveStatus(effectiveStatus(t, now)));
+  const checkinReady = active.filter((task) =>
+    taskIsNearEnd(task, now, profile.checkin_sensitivity)
+  );
+  if (!checkinReady.length) return null;
 
   // --- 1. Repeated disruption: a task moved several times -------------
   if (profile.trigger_repeated_enabled) {
-    const repeated = active
-      .filter((t) => t.move_count >= REPEATED_MOVE_THRESHOLD && !withinCooldown(t, now))
+    const repeated = checkinReady
+      .filter((t) => t.move_count >= REPEATED_MOVE_THRESHOLD && !withinCooldown(t, now, profile.checkin_sensitivity))
       .sort((a, b) => b.move_count - a.move_count)[0];
     if (repeated) {
       return {
@@ -48,15 +70,17 @@ export function detectSituation(
 
   // --- 2. Overrun: a scheduled task's end time has passed -------------
   if (profile.trigger_overrun_enabled) {
-    const overdue = active
-      .filter((t) => effectiveStatus(t, now) === "overdue" && !withinCooldown(t, now))
+    const ending = checkinReady
+      .filter((t) => !withinCooldown(t, now, profile.checkin_sensitivity))
       .sort((a, b) => new Date(a.end_time).getTime() - new Date(b.end_time).getTime())[0];
-    if (overdue) {
+    if (ending) {
+      const minutesRemaining = Math.max(0, minutesBetween(now, new Date(ending.end_time)));
       return {
         trigger_type: "overrun",
-        task: overdue,
+        task: ending,
         context: {
-          minutesOverdue: minutesBetween(new Date(overdue.end_time), now),
+          minutesRemaining,
+          minutesOverdue: Math.max(0, minutesBetween(new Date(ending.end_time), now)),
         },
       };
     }
@@ -64,12 +88,12 @@ export function detectSituation(
 
   // --- 3. Accumulation: multiple overdue / untouched tasks -------------
   if (profile.trigger_accumulation_enabled) {
-    const overdueTasks = active.filter((t) => effectiveStatus(t, now) === "overdue");
-    const untouched = active.filter((t) => t.status === "not_started");
+    const overdueTasks = checkinReady.filter((t) => effectiveStatus(t, now) === "overdue");
+    const untouched = checkinReady.filter((t) => t.status === "not_started");
     const overloaded = overdueTasks.length >= 2 || (overdueTasks.length >= 1 && untouched.length >= 2);
 
     if (overloaded) {
-      const anyRecent = active.some((t) => withinCooldown(t, now));
+      const anyRecent = checkinReady.some((t) => withinCooldown(t, now, profile.checkin_sensitivity));
       if (!anyRecent) {
         return {
           trigger_type: "accumulation",
@@ -88,13 +112,14 @@ export function detectSituation(
     const percentElapsed = percentOfWorkdayElapsed(
       now,
       profile.working_hours_start,
-      profile.working_hours_end
+      profile.working_hours_end,
+      profile.timezone
     );
     const completed = tasks.filter((t) => t.status === "completed" || t.status === "shrunk").length;
     const progressRatio = tasks.length > 0 ? completed / tasks.length : 1;
 
     if (percentElapsed >= 50 && progressRatio < 0.3 && active.length > 0) {
-      const anyRecent = active.some((t) => withinCooldown(t, now));
+      const anyRecent = checkinReady.some((t) => withinCooldown(t, now, profile.checkin_sensitivity));
       if (!anyRecent) {
         return {
           trigger_type: "drift",
@@ -120,18 +145,31 @@ export function cooldownForSensitivity(sensitivity: Profile["checkin_sensitivity
     case "proactive":
       return 15;
     default:
-      return COOLDOWN_MINUTES;
+      return 30;
   }
 }
 
-export function isQuietHours(now: Date, profile: Profile): boolean {
+export function isQuietHours(now: Date, profile: Profile, timeZone = profile.timezone): boolean {
   if (!profile.quiet_hours_start || !profile.quiet_hours_end) return false;
   const [sh, sm] = profile.quiet_hours_start.split(":").map(Number);
   const [eh, em] = profile.quiet_hours_end.split(":").map(Number);
 
   const start = sh * 60 + sm;
   const end = eh * 60 + em;
-  const cur = now.getHours() * 60 + now.getMinutes();
+  let cur: number;
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(now);
+    cur =
+      Number(parts.find((part) => part.type === "hour")?.value ?? 0) * 60 +
+      Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  } else {
+    cur = now.getHours() * 60 + now.getMinutes();
+  }
 
   if (start === end) return false;
   if (start < end) return cur >= start && cur < end;

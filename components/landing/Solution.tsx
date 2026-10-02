@@ -23,7 +23,7 @@ const STEPS = [
 
 export function Solution() {
   return (
-    <section id="how-it-works" className="bg-white py-20 sm:py-28">
+    <section id="how-it-works" className="bg-surface py-20 sm:py-28">
       <div className="content-wrap">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-serif text-3xl font-medium text-forest sm:text-4xl">

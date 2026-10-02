@@ -77,6 +77,7 @@ export interface Checkin {
 export interface Profile {
   id: string;
   full_name: string | null;
+  timezone: string;
   notifications_enabled: boolean;
   quiet_hours_start: string | null;
   quiet_hours_end: string | null;

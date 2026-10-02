@@ -23,7 +23,7 @@ export function TodayOverview({ tasks }: { tasks: Task[] }) {
       <div>
         <p className="text-sm text-charcoal/50">
           {formatFriendlyDate(now)} &middot;{" "}
-          {now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+          {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="font-serif text-2xl text-forest">Today</h1>

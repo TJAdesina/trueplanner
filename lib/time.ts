@@ -1,5 +1,5 @@
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
+  return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -43,7 +43,7 @@ export function formatDuration(minutes: number): string {
 }
 
 export function formatFriendlyDate(d: Date = new Date()): string {
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -54,17 +54,29 @@ export function formatFriendlyDate(d: Date = new Date()): string {
 export function percentOfWorkdayElapsed(
   now: Date,
   workStart: string,
-  workEnd: string
+  workEnd: string,
+  timeZone?: string
 ): number {
   const [sh, sm] = workStart.split(":").map(Number);
   const [eh, em] = workEnd.split(":").map(Number);
-  const start = new Date(now);
-  start.setHours(sh, sm, 0, 0);
-  const end = new Date(now);
-  end.setHours(eh, em, 0, 0);
-
-  const total = end.getTime() - start.getTime();
+  const start = sh * 60 + sm;
+  const end = eh * 60 + em;
+  const total = end - start;
   if (total <= 0) return 0;
-  const elapsed = now.getTime() - start.getTime();
+  let currentMinutes: number;
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(now);
+    currentMinutes =
+      Number(parts.find((part) => part.type === "hour")?.value ?? 0) * 60 +
+      Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  } else {
+    currentMinutes = now.getHours() * 60 + now.getMinutes();
+  }
+  const elapsed = currentMinutes - start;
   return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
 }

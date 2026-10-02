@@ -25,7 +25,7 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-card border border-charcoal/10 bg-white p-6 shadow-soft animate-fadeIn"
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-card border border-charcoal/10 bg-surface p-6 shadow-soft animate-fadeIn"
       >
         <div className="flex items-center justify-between">
           <h2 className="font-serif text-xl text-forest">{title}</h2>

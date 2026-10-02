@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { detectSituation, isQuietHours } from "@/lib/triggers";
-import { notifyCheckin, notificationPermission } from "@/lib/notifications";
 import type { Checkin, Profile, Task } from "@/lib/types";
 
 const CHECK_INTERVAL_MS = 30_000;
@@ -24,15 +23,10 @@ export function useCheckinEngine(tasks: Task[], profile: Profile | null) {
     try {
       const res = await fetch("/api/checkin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ situation }),
       });
       if (res.ok) {
         const { checkin } = await res.json();
-        setActiveCheckin(checkin as Checkin);
-        if (notificationPermission() === "granted") {
-          notifyCheckin(checkin as Checkin);
-        }
+        if (checkin) setActiveCheckin(checkin as Checkin);
       }
     } finally {
       inFlight.current = false;

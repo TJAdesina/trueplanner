@@ -1,11 +1,44 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useTasks } from "@/hooks/useTasks";
 import { formatFriendlyDate } from "@/lib/time";
 import { summarizeProgress } from "@/lib/taskUtils";
+import type { DailyReview } from "@/lib/dailyReview";
 
 export default function EndOfDayPage() {
   const { tasks, loading } = useTasks();
+  const [review, setReview] = useState<DailyReview | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+    if (tasks.length === 0) {
+      setReviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    fetch("/api/end-of-day")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load the daily review.");
+        return response.json();
+      })
+      .then(({ review: dailyReview }) => {
+        if (!cancelled) setReview(dailyReview as DailyReview);
+      })
+      .catch(() => {
+        if (!cancelled) setReviewError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setReviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, tasks.length]);
 
   if (loading) {
     return <p className="text-sm text-charcoal/50">Loading today&rsquo;s summary\u2026</p>;
@@ -49,6 +82,42 @@ export default function EndOfDayPage() {
               what got crossed off.
             </p>
           </div>
+
+          {reviewLoading && (
+            <p className="text-sm text-charcoal/55">Preparing your reflection...</p>
+          )}
+          {reviewError && (
+            <p className="text-sm text-charcoal/65">
+              Your statistics are ready, but the written reflection could not be loaded. Refresh to try again.
+            </p>
+          )}
+          {review && (
+            <>
+              <div className="card p-6">
+                <p className="font-serif text-lg leading-relaxed text-forest">{review.assessment}</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <section className="card p-5">
+                  <h2 className="text-sm font-semibold text-forest">What went well</h2>
+                  <ul className="mt-3 space-y-2 text-sm leading-relaxed text-charcoal/75">
+                    {review.wentWell.map((item, index) => <li key={index}>{item}</li>)}
+                  </ul>
+                </section>
+                <section className="card p-5">
+                  <h2 className="text-sm font-semibold text-forest">What to improve</h2>
+                  <ul className="mt-3 space-y-2 text-sm leading-relaxed text-charcoal/75">
+                    {review.improve.map((item, index) => <li key={index}>{item}</li>)}
+                  </ul>
+                </section>
+                <section className="card p-5">
+                  <h2 className="text-sm font-semibold text-forest">Plan for tomorrow</h2>
+                  <ul className="mt-3 space-y-2 text-sm leading-relaxed text-charcoal/75">
+                    {review.planTomorrow.map((item, index) => <li key={index}>{item}</li>)}
+                  </ul>
+                </section>
+              </div>
+            </>
+          )}
 
           <div className="card divide-y divide-charcoal/8 p-6">
             {rows.map((r) => (

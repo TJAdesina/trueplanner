@@ -26,8 +26,9 @@ honest end-of-day summary).
   (a task ran over, the day is drifting, tasks are piling up, or one task
   keeps getting rescheduled). A separate writer decides *how* to phrase it
   — either the built-in rule-based writer, or live Gemini calls if you add
-  an API key. You always get to **Cut**, **Shrink**, or **Move** — never a
-  guilt trip.
+  an API key. A server-side Vercel Cron job reevaluates tasks every five
+  minutes, even when the dashboard is closed. You always get to **Cut**,
+  **Shrink**, or **Move** — never a guilt trip.
 - **End of day** (`/dashboard/end-of-day`) — a reflective summary that
   counts completed, started, shrunk, moved, and cut tasks, not just
   checkmarks.
@@ -41,8 +42,9 @@ honest end-of-day summary).
 - **Gemini API** (`gemini-3.5-flash-lite`) for live check-in copy, with an
   automatic on-brand rule-based fallback when no key is configured
 
-Nothing about the app depends on any single host — it deploys cleanly to
-Vercel, Netlify, or any Node hosting that supports Next.js.
+The app deploys to Vercel, Netlify, or any Node hosting that supports
+Next.js. The included five-minute schedule uses Vercel Cron; other hosts
+need an external scheduler to call the same protected endpoint.
 
 ---
 
@@ -103,11 +105,33 @@ Open `.env.local` and fill in:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # optional — leave blank to use the built-in rule-based check-in writer
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.5-flash-lite
+
+# optional — enable background web push notifications
+VAPID_PUBLIC_KEY=your-vapid-public-key
+VAPID_PRIVATE_KEY=your-vapid-private-key
+VAPID_SUBJECT=mailto:you@example.com
+
+# required for the deployed Vercel Cron endpoint
+CRON_SECRET=replace-with-a-long-random-secret
 ```
+
+Generate a VAPID key pair with `npx web-push generate-vapid-keys`. Keep the
+private key server-side; only the public key is sent to the browser. Push
+notifications require HTTPS in production (localhost is allowed for local
+development). After deploying, enable notifications from the dashboard or
+**Settings → Notifications**. The `push_subscriptions` table and its RLS
+policies are included in `supabase/schema.sql`; rerun that schema if your
+Supabase database was set up before Web Push was added. The service worker
+can display delivered pushes with the tab closed. The scheduler uses the
+server-only `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET`; never prefix these
+with `NEXT_PUBLIC_`. Vercel invokes it every five minutes in production. To
+run it locally, call `GET /api/checkin/cron` with an
+`Authorization: Bearer <CRON_SECRET>` header after setting those variables.
 
 ```bash
 # 3. Start the dev server
@@ -140,19 +164,25 @@ committed.)
 1. Go to [vercel.com/new](https://vercel.com/new) and import the GitHub
    repository you just pushed.
 2. Vercel auto-detects Next.js — no build configuration needed.
-3. Under **Environment Variables**, add the same three (or four) values
-   from your `.env.local`:
+3. Under **Environment Variables**, add the values from your `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (required for scheduled check-ins)
    - `GEMINI_API_KEY` (optional)
    - `GEMINI_MODEL` (optional, defaults to `gemini-3.5-flash-lite`)
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (for Web Push)
+   - `CRON_SECRET` (protects the scheduled endpoint)
+   - The five-minute Vercel Cron schedule requires a plan that supports that
+     frequency.
 4. Click **Deploy**. You'll have a live URL in about a minute.
 
 ### Deploy on Netlify
 
 Netlify also supports Next.js natively — import the repo, add the same
 environment variables under **Site settings → Environment variables**, and
-deploy. No extra configuration is required for this project.
+deploy. Netlify does not use `vercel.json`; configure an external cron
+service to request `/api/checkin/cron` every five minutes with the
+`Authorization: Bearer <CRON_SECRET>` header.
 
 ### One more Supabase step after deploying
 
@@ -199,6 +229,7 @@ app/
     settings/                Settings
     end-of-day/               Reflective daily summary
   api/checkin/route.ts        Generates a check-in (Gemini or template)
+  api/checkin/cron/           Scheduled trigger evaluation (every five minutes)
   auth/callback/route.ts      Supabase email-confirmation callback
 components/
   landing/                   Landing page sections
@@ -227,9 +258,6 @@ brand spec changes, those two files are the place to start.
 
 ## 10. What's intentionally out of scope for this MVP
 
-- Push notifications when the browser tab is fully closed (v1 uses the
-  in-tab Notification API, which covers background tabs but not a closed
-  browser). A future version could add a service worker + push backend.
 - Multi-device real-time sync beyond what Supabase gives "for free" on
   refresh (no live websocket subscriptions yet — reload to see updates
   made elsewhere).

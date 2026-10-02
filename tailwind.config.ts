@@ -9,12 +9,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cream: "#FFF9F0",
-        forest: "#193B32",
-        "forest-light": "#24544A",
-        green: "#65B891",
-        peach: "#F4B183",
-        charcoal: "#30302E",
+        cream: "rgb(var(--color-cream) / <alpha-value>)",
+        forest: "rgb(var(--color-forest) / <alpha-value>)",
+        "forest-light": "rgb(var(--color-forest-light) / <alpha-value>)",
+        green: "rgb(var(--color-green) / <alpha-value>)",
+        peach: "rgb(var(--color-peach) / <alpha-value>)",
+        charcoal: "rgb(var(--color-charcoal) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
         // Dark mode surfaces (kept within brand family)
         "cream-dark": "#15201C",
         "surface-dark": "#1C2B25",

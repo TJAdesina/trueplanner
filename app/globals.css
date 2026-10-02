@@ -3,6 +3,38 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    --color-cream: 255 249 240;
+    --color-forest: 25 59 50;
+    --color-forest-light: 36 84 74;
+    --color-green: 101 184 145;
+    --color-peach: 244 177 131;
+    --color-charcoal: 48 48 46;
+    --color-surface: 255 255 255;
+    --color-border: 48 48 46;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+    --color-cream: 21 32 28;
+    --color-forest: 225 239 230;
+    --color-forest-light: 192 220 203;
+    --color-green: 111 194 151;
+    --color-peach: 244 177 131;
+    --color-charcoal: 231 235 229;
+    --color-surface: 28 43 37;
+    --color-border: 190 210 197;
+  }
+
+  body {
+    background-color: rgb(var(--color-cream));
+    color: rgb(var(--color-charcoal));
+  }
+
+}
+
+@layer base {
   html {
     scroll-behavior: smooth;
   }
@@ -40,7 +72,7 @@
   }
 
   .card {
-    @apply rounded-card border border-charcoal/10 bg-white shadow-subtle;
+    @apply rounded-card border border-charcoal/10 bg-surface shadow-subtle;
   }
 
   .eyebrow {
@@ -55,4 +87,8 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.dark .card {
+  border-color: rgb(var(--color-border) / 0.16);
 }

@@ -36,11 +36,11 @@ export function RecoveryPanel({ checkin, task, onCut, onShrink, onMove, onDismis
       )}
 
       <div className="mt-5 flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={onCut} className="bg-white">
+        <Button variant="secondary" onClick={onCut} className="bg-surface">
           Cut it
         </Button>
         <Button onClick={onShrink}>Shrink it</Button>
-        <Button variant="secondary" onClick={onMove} className="bg-white">
+        <Button variant="secondary" onClick={onMove} className="bg-surface">
           Move it
         </Button>
       </div>

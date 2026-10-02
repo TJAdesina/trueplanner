@@ -33,6 +33,22 @@ export function generateTemplateCheckin(situation: DetectedSituation): CheckinCo
     case "overrun": {
       const title = situation.task?.title ?? "This task";
       const overdue = situation.context.minutesOverdue ?? 0;
+      const remaining = situation.context.minutesRemaining ?? 0;
+
+      if (remaining > 0) {
+        const headlines = ["A quick time check", "This task is nearing its end", "Review this task"];
+        const bodies = [
+          `"${title}" is scheduled to end in ${formatDuration(remaining)} and is still open. Decide what can realistically be finished in the remaining time.`,
+          `"${title}" has ${formatDuration(remaining)} left in its time block. Focus on the essential part or adjust the plan.`,
+          `Your time block for "${title}" is nearly over. What is the most useful next step?`,
+        ];
+
+        return {
+          headline: pick(headlines, seed),
+          message: pick(bodies, seed >> 2),
+          source: "template",
+        };
+      }
 
       const headlines = ["Time's up on this one.", "This task ran past its window.", "Your plan is getting tight."];
       const bodies = [
@@ -66,11 +82,15 @@ export function generateTemplateCheckin(situation: DetectedSituation): CheckinCo
 
     case "accumulation": {
       const { overdueCount = 0, totalCount = 0 } = situation.context;
-      const headlines = ["Need a reset?", "The plan is carrying too much.", "This list isn't realistic anymore."];
+      const taskNames = (situation.relatedTasks ?? []).slice(0, 2).map((task) => task.title);
+      const namedTasks = taskNames.length ? ` Start with ${taskNames.map((title) => `"${title}"`).join(" and ")}.` : "";
+      const headlines = taskNames.length
+        ? [`${taskNames[0]} needs a reset.`, `Revisit ${taskNames[0]}.`, `Adjust ${taskNames[0]}.`]
+        : ["Need a reset?", "The plan is carrying too much.", "This list isn't realistic anymore."];
       const bodies = [
-        `${overdueCount} of ${totalCount} tasks are overdue. The original plan probably doesn't fit the time left \u2014 let's cut, shrink, or move a few things.`,
-        `Several tasks have piled up. Rather than push through all of them, pick what still matters and let the rest go for today.`,
-        `The remaining workload isn't realistic for the time left. Choose one or two things that matter and adjust the rest.`,
+        `${overdueCount} of ${totalCount} tasks are overdue.${namedTasks} Choose what still matters and adjust the rest.`,
+        `Several tasks are overdue.${namedTasks} Decide which one is still worth doing today.`,
+        `The remaining plan may not fit the time left.${namedTasks} Choose one useful next step.`,
       ];
 
       return {
